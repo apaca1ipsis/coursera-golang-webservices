@@ -1,0 +1,44 @@
+{{- block "handler" .}}
+func (srv *{{.ReceiverType}}) handler{{.MethodName}}(w http.ResponseWriter, r *http.Request) {
+	{{- if .AllowedRequest}}
+	methodIsBad := CheckMethod("{{.AllowedRequest}}", r.Method)
+	if methodIsBad != nil {
+		methodIsBad.WriteResponse(w)
+		return
+	}
+	{{- end}}
+	{{- if .NeedAuth}}
+	isUnauthorized := CheckAuthorization(r.Header.Get("X-Auth"))
+	if isUnauthorized != nil {
+		isUnauthorized.WriteResponse(w)
+		return
+	}
+	{{- end}}
+
+{{- with .Params }}
+	{{- $paramName := "" }}
+	{{- range $idx, $param := .}}
+		{{- if eq $param "Context.context"}}
+	ctx := r.Context()
+		{{- else }}
+			{{- $paramName = printf `%s` $param}}
+		{{- end}}
+	{{- end}}
+	in, err := Set{{$paramName}}(r)
+{{- end }}
+	if err != nil {
+		err.WriteResponse(w)
+		return
+	}
+	usr, methodErr := srv.{{.MethodName}}(ctx, *in)
+	if methodErr != nil {
+		var ae *ApiError
+		ae = handleError(methodErr)
+		ae.WriteResponse(w)
+		return
+	}
+	isOk := &ApiAnswer{http.StatusOK, usr}
+	isOk.WriteResponse(w)
+
+}
+{{- end}}

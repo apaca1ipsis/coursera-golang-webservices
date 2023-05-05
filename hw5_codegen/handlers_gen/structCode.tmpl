@@ -1,0 +1,16 @@
+{{- block "structCode" . }}
+// {{.StructName}} set/validate
+func Set{{.StructName}}(r *http.Request)(*{{.StructName}}, *ApiError) {
+    var parentStruct {{.StructName}}
+    vals, setErr := SetValues(r)
+    if setErr != nil {
+        return nil, setErr
+    }
+{{- with .Params}}
+    {{- range $key, $value := .}}
+        {{- template "fieldCode" $value}}
+    {{- end}}
+{{- end}}
+    return &parentStruct, nil
+}
+{{- end}}

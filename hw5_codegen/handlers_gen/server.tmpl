@@ -1,0 +1,24 @@
+{{- block "server" .}}
+    {{- range $objName, $methods := .}}
+    // {{$objName}} serveHTTP
+func (srv *{{$objName}}) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    switch r.URL.Path {
+    {{- with $methods }}
+        {{- range $idx, $mthdElem := .}}
+    case "{{$mthdElem.Url}}":
+         srv.handler{{$mthdElem.MethodName}}(w,r)
+        {{- end}}
+    {{- end}}
+    default:
+        apiErr := &ApiError{http.StatusNotFound, errors.New("unknown method")}
+        apiErr.WriteResponse(w)
+    }
+}
+{{- with $methods }}
+    {{- range $i, $method := .}}
+        {{- template "handler" $method}}
+    {{- end}}
+{{- end}}
+
+    {{- end}}
+{{- end}}

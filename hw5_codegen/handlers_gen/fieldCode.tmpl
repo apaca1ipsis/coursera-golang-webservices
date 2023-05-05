@@ -1,0 +1,65 @@
+{{- block "fieldCode" . }}
+    {{$varName := .ParamName }}
+    {{$varName}} := vals.Get("{{.ParamName}}")
+    {{- if .IsRequired}}
+    /* required*/
+    if {{$varName}} == "" {
+        return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} must me not empty")}
+    }
+    {{- end}}
+    {{- if eq .ParamType "int" }}
+    /* atoi, min, max for int*/
+    {{- $varName = printf "%s%s" $varName "0" }}
+    {{ $varName }}, err := strconv.Atoi({{.ParamName}})
+    if err != nil {
+        return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} must be int"),}
+    }
+    {{- if .Min}}
+    if {{$varName}} < {{.Min}} {
+        return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} must be >= {{.Min}}"),}
+    }
+    {{- end }}
+    {{- if .Max}}
+    if {{$varName}} > {{.Max}} {
+        return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} must be <= {{.Max}}"),}
+    }
+    {{- end }}
+    {{- end }}
+    {{- if eq .ParamType "string" }}
+    /* min, max for string*/
+    {{- if .Min}}
+    if len({{$varName}}) < {{.Min}} {
+        return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} len must be >= {{.Min}}"),}
+    }
+    {{- end }}
+    {{- if .Max}}
+    if len({{$varName}}) > {{.Max}} {
+        return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} len must be <= {{.Max}}"),}
+    }
+    {{- end }}
+    {{- end }}
+    {{- if .Enum}}
+     /*enum*/
+     {{- $allVals := ""}}
+     {{- range $key, $value := .Enum}}
+     {{- $allVals = printf `%s"%s",` $allVals $value}}
+     {{- end}}
+     {{- $varName}}Enum := []string{ {{$allVals}} }
+     if {{$varName}} == "" {
+        {{ $varName}} = "{{.DefaultValue}}"
+     } else {
+        ok := false
+        for _, v := range  {{$varName}}Enum {
+           if {{$varName}} == v {
+               ok = true
+               break
+           }
+        }
+        if !ok {
+           return nil, &ApiError{http.StatusBadRequest, errors.New("{{.ParamName}} must be one of [" + strings.Join({{$varName}}Enum, ", ") + "]"),}
+        }
+     }
+
+    {{- end}}
+    parentStruct.{{.Name | ToUpper }} = {{$varName}}
+{{- end}}

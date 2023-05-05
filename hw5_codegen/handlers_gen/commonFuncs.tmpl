@@ -1,0 +1,111 @@
+func CheckMethod(allowed, current string) *ApiError {
+	if allowed == current {
+		return nil
+	}
+
+	return &ApiError{http.StatusNotAcceptable,
+		errors.New(`bad method`),
+	}
+}
+
+const isAuthorized = "100500"
+
+func CheckAuthorization(s string) *ApiError {
+	if s == isAuthorized {
+		return nil
+	}
+	return &ApiError{http.StatusForbidden,
+		errors.New(`unauthorized`),
+	}
+}
+
+type ApiAnswer struct {
+	HTTPStatus int
+	msg        any
+}
+
+func (answ ApiError) toJson() ([]byte, error) {
+	resp := make(map[string]string)
+	resp["error"] = answ.Error()
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		return nil, errors.Errorf("Error happened in JSON marshal. Err: %s", err)
+	}
+	return jsonResp, nil
+}
+
+func (answ ApiError) WriteResponse(w http.ResponseWriter) {
+	msg, err := answ.toJson()
+	if err != nil {
+		txt := fmt.Sprintf("Error happened in http.ResponseWriter write. Err: %s", err)
+		errInner := &ApiError{http.StatusInternalServerError, errors.New(txt)}
+		errInner.WriteResponse(w)
+		log.Fatalf(txt)
+	} else {
+		w.WriteHeader(answ.HTTPStatus)
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.Write(msg)
+}
+
+func (answ *ApiAnswer) toJson() ([]byte, error) {
+	resp := make(map[string]any)
+	resp["response"] = answ.msg
+	resp["error"] = ""
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		return nil, errors.Errorf("Error happened in JSON marshal. Err: %s", err)
+	}
+	return jsonResp, nil
+}
+
+func (answ *ApiAnswer) WriteResponse(w http.ResponseWriter) {
+	msg, err := answ.toJson()
+	if err != nil {
+		txt := fmt.Sprintf("Error happened in http.ResponseWriter write. Err: %s", err)
+		errInner := &ApiError{http.StatusInternalServerError, errors.New(txt)}
+		errInner.WriteResponse(w)
+		log.Fatalf(txt)
+	} else {
+		w.WriteHeader(answ.HTTPStatus)
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.Write(msg)
+}
+
+func SetValues(r *http.Request) (*url.Values, *ApiError) {
+	var vals url.Values
+	switch r.Method {
+	case http.MethodGet:
+		vals = r.URL.Query()
+		return &vals, nil
+	case http.MethodPost:
+		var body []byte
+		var err error
+		body, err = io.ReadAll(r.Body)
+		if err != nil {
+			return nil, &ApiError{http.StatusInternalServerError, err}
+		}
+		vals, err = url.ParseQuery(string(body))
+		if err != nil {
+			return nil, &ApiError{http.StatusInternalServerError, err}
+		}
+		return &vals, nil
+	default:
+		return nil, &ApiError{http.StatusMethodNotAllowed, errors.New("unknown method")}
+	}
+}
+
+func handleError(methodErr error) *ApiError {
+	if reflect.TypeOf(methodErr) == reflect.TypeOf(ApiError{}) {
+		ae, ok := methodErr.(ApiError)
+		if !ok {
+			innerErr := ApiError{http.StatusInternalServerError,
+				errors.Errorf("error converting %v to ApiError", methodErr)}
+			return &innerErr
+		}
+		return &ae
+	} else {
+		return &ApiError{http.StatusInternalServerError, methodErr}
+	}
+}
